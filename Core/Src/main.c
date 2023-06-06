@@ -19,7 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_device.h"
-
+#include "usbd_cdc_if.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -126,6 +126,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   LED_RGB_Init();
   uint8_t intensity = 0;
+  char txBuf[8];
+  uint8_t count = 1;
 
   /* USER CODE END 2 */
 
@@ -133,6 +135,13 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  sprintf(txBuf,"%u\r\n",count);
+	  count++;
+	  if(count > 100){
+		  count = 1;
+	  }
+
+	  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
 
 	  intensity += 5;
 	  if(intensity > 100 || intensity < 0){
