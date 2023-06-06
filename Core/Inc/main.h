@@ -36,7 +36,8 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+extern uint8_t dev_status;
+extern uint8_t write_status;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -61,6 +62,9 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define LED_Pin GPIO_PIN_13
 #define LED_GPIO_Port GPIOB
+#define IMU_INT_Pin GPIO_PIN_8
+#define IMU_INT_GPIO_Port GPIOB
+#define IMU_INT_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
 

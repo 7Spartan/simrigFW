@@ -19,10 +19,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_device.h"
-#include "usbd_cdc_if.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+//#include "stdio.h"
+#include "usbd_cdc_if.h"
+#include "mpu6050.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,6 +75,15 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int _write(int file, char *ptr, int len){
+	int DataIdx;
+	for(DataIdx = 0; (DataIdx < len); DataIdx++){
+    	ITM_SendChar(*ptr++);
+    }
+     return len;
+}
+
+
 void LED_RGB_Init(){
 	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_1);
@@ -84,6 +95,12 @@ void  LED_RGB_SetIntensity(uint8_t red, uint8_t green, uint8_t blue){
 	htim2.Instance->CCR1 = 100 - green;
 	htim3.Instance->CCR1 = 100 - blue;
 }
+
+//uint8_t MPU6050_IMURead8(uint8_t addr,uint8_t *data){
+//
+//}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -126,8 +143,9 @@ int main(void)
   /* USER CODE BEGIN 2 */
   LED_RGB_Init();
   uint8_t intensity = 0;
+  uint8_t count = 0;
   char txBuf[8];
-  uint8_t count = 1;
+  mpu6050_init();
 
   /* USER CODE END 2 */
 
@@ -135,19 +153,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  sprintf(txBuf,"%u\r\n",count);
-	  count++;
-	  if(count > 100){
-		  count = 1;
-	  }
-
-	  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
-
-	  intensity += 5;
-	  if(intensity > 100 || intensity < 0){
-		  intensity = 0;
-	  }
-	  LED_RGB_SetIntensity(intensity - 10,intensity -20,intensity);
+	  mpu6050_read();
+//	  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
 	  HAL_Delay(100);
     /* USER CODE END WHILE */
 
@@ -656,6 +663,16 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : IMU_INT_Pin */
+  GPIO_InitStruct.Pin = IMU_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(IMU_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
