@@ -153,9 +153,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  mpu6050_read();
+//	  mpu6050_read();
 //	  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
-	  HAL_Delay(100);
+	  HAL_Delay(2);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -679,7 +679,13 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if(GPIO_Pin == IMU_INT_Pin){
+		  mpu6050_read();
+	}else{
+		__NOP();
+	}
+}
 /* USER CODE END 4 */
 
 /**
