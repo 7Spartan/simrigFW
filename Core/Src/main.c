@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-//#include "stdio.h"
+#include "stdio.h"
 #include "usbd_cdc_if.h"
 #include "mpu6050.h"
 /* USER CODE END Includes */
@@ -55,7 +55,9 @@ TIM_HandleTypeDef htim9;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+int16_t acceleration = 0;
+int16_t *accelerationPtr = &acceleration;
+bool IMU_read_write = true;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -144,23 +146,35 @@ int main(void)
   LED_RGB_Init();
   uint8_t intensity = 0;
   uint8_t count = 0;
-  char txBuf[8];
-  mpu6050_init();
+  char txBuf[32];
+
+  int mpu_status = mpu6050_init();
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  if (mpu_status != HAL_OK){
+	  sprintf(txBuf,"%u\r\n",mpu_status);
+	  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
+	  HAL_Delay(5);
+  }else{
   while (1)
   {
-//	  mpu6050_read();
-//	  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
-	  HAL_Delay(2);
+	  *accelerationPtr = mpu6050_read(0);
+	  if(IMU_read_write){
+		  IMU_read_write = false;
+		  sprintf(txBuf,"%d\r\n",*accelerationPtr);
+		  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
+		  IMU_read_write = true;
+	  }
+	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
+  }
 }
 
 /**
@@ -681,7 +695,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == IMU_INT_Pin){
-		  mpu6050_read();
+		*accelerationPtr = mpu6050_read(0);
 	}else{
 		__NOP();
 	}

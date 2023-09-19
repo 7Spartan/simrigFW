@@ -28,7 +28,7 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
-
+#include "stdbool.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -56,7 +56,13 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+enum imuStatus{
+	imuinitpass = 10,
+	imuinitfail = 11,
+	gyroinitpass = 12,
+	gyroinitfail = 13,
 
+};
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

@@ -1,6 +1,8 @@
 #ifndef INC_MPU6050_H_
 #define INC_MPU6050_H_
 
+#include <stdint.h>
+
 #define DEVICE_ADDRESS 0X68
 
 #define FS_GYRO_250	0
@@ -18,10 +20,7 @@
 #define REG_USR_CTRL	107 //Temperature sensor
 #define INTERRUPT_REGISTER	56
 #define REG_DATA	59
-
 #define DATA_READY_INTERRUPT	1
-
-
-void mpu6050_init();
-void mpu6050_read();
+int mpu6050_init();
+int16_t mpu6050_read(int16_t);
 #endif
