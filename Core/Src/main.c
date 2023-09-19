@@ -695,7 +695,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == IMU_INT_Pin){
-		*accelerationPtr = mpu6050_read(0);
+//		*accelerationPtr = mpu6050_read(0);
 	}else{
 		__NOP();
 	}
