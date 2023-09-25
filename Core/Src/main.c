@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2023 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -77,22 +77,21 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-int _write(int file, char *ptr, int len){
+int _write(int file, char *ptr, int len) {
 	int DataIdx;
-	for(DataIdx = 0; (DataIdx < len); DataIdx++){
-    	ITM_SendChar(*ptr++);
-    }
-     return len;
+	for (DataIdx = 0; (DataIdx < len); DataIdx++) {
+		ITM_SendChar(*ptr++);
+	}
+	return len;
 }
 
-
-void LED_RGB_Init(){
-	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
+void LED_RGB_Init() {
+	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 }
 
-void  LED_RGB_SetIntensity(uint8_t red, uint8_t green, uint8_t blue){
+void LED_RGB_SetIntensity(uint8_t red, uint8_t green, uint8_t blue) {
 	htim1.Instance->CCR1 = 100 - red;
 	htim2.Instance->CCR1 = 100 - green;
 	htim3.Instance->CCR1 = 100 - blue;
@@ -101,7 +100,6 @@ void  LED_RGB_SetIntensity(uint8_t red, uint8_t green, uint8_t blue){
 //uint8_t MPU6050_IMURead8(uint8_t addr,uint8_t *data){
 //
 //}
-
 
 /* USER CODE END 0 */
 
@@ -143,38 +141,59 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  LED_RGB_Init();
-  uint8_t intensity = 0;
-  uint8_t count = 0;
-  char txBuf[32];
-
-  int mpu_status = mpu6050_init();
+	LED_RGB_Init();
+	uint16_t intensity = 0;
+	uint16_t count = 0;
+	char txBuf[32];
+	int led_state=GPIO_PIN_RESET;
+	int mpu_status = mpu6050_init();
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  if (mpu_status != HAL_OK){
-	  sprintf(txBuf,"%u\r\n",mpu_status);
-	  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
-	  HAL_Delay(5);
-  }else{
-  while (1)
-  {
-	  *accelerationPtr = mpu6050_read(0);
-	  if(IMU_read_write){
-		  IMU_read_write = false;
-		  sprintf(txBuf,"%d\r\n",*accelerationPtr);
-		  CDC_Transmit_FS((uint8_t *)txBuf, strlen(txBuf));
-		  IMU_read_write = true;
-	  }
-	  HAL_Delay(10);
+	if (mpu_status != HAL_OK) {
+		sprintf(txBuf, "%u\r\n", mpu_status);
+		CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+		HAL_Delay(5);
+	} else {
+		HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, GPIO_PIN_SET);
+//		HAL_GPIO_WritePin(GPIOB, LED_Pin, GPIO_PIN_SET);
+		while (1) {
+			*accelerationPtr = mpu6050_read(0);
+			if (IMU_read_write) {
+				IMU_read_write = false;
+				sprintf(txBuf, "%d\r\n", count);
+				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+				IMU_read_write = true;
+			}
+
+			if(count<200){
+				count++;
+				led_state = GPIO_PIN_SET;
+				intensity = 32768;
+				HAL_Delay(1);
+			}else if(count<400){
+				count++;
+				led_state = GPIO_PIN_RESET;
+				intensity = 0;
+				HAL_Delay(1);
+			}else{
+				count=0;
+				HAL_Delay(1);
+			}
+
+			HAL_GPIO_WritePin(GPIOB, LED_Pin, led_state);
+			HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, led_state);
+			TIM1->CCR1 = intensity;
+			HAL_Delay(1);
+
+		}
+	}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
   /* USER CODE END 3 */
-  }
 }
 
 /**
@@ -277,12 +296,12 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 7200-1;
+  htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 100-1;
+  htim1.Init.Period = 65535;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
     Error_Handler();
@@ -669,14 +688,14 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin|LED_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
+  /*Configure GPIO pins : M1_DIR_Pin LED_Pin */
+  GPIO_InitStruct.Pin = M1_DIR_Pin|LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : IMU_INT_Pin */
   GPIO_InitStruct.Pin = IMU_INT_Pin;
@@ -693,13 +712,13 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	if(GPIO_Pin == IMU_INT_Pin){
+	void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+		if (GPIO_Pin == IMU_INT_Pin) {
 //		*accelerationPtr = mpu6050_read(0);
-	}else{
-		__NOP();
+		} else {
+			__NOP();
+		}
 	}
-}
 /* USER CODE END 4 */
 
 /**
@@ -709,11 +728,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+		/* User can add his own implementation to report the HAL error return state */
+		__disable_irq();
+		while (1) {
+		}
   /* USER CODE END Error_Handler_Debug */
 }
 
