@@ -1,0 +1,8 @@
+*.cyclo
+*.d
+*.o
+*.su
+*.mk
+*.elf
+*.map
+

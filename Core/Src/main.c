@@ -25,6 +25,7 @@
 #include "stdio.h"
 #include "usbd_cdc_if.h"
 #include "mpu6050.h"
+#include "math.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,7 +35,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define MOTOR_DRIVER_PPR 800 // Motor driver is set to 800 pulses per revolution -> 0.45°per pulse
+#define BALL_SCREW_PITCH 5	// Ball screw linear actuator pitch  -> 5mm
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -58,6 +60,7 @@ UART_HandleTypeDef huart1;
 int16_t acceleration = 0;
 int16_t *accelerationPtr = &acceleration;
 bool IMU_read_write = true;
+uint8_t user_inp[1];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -95,6 +98,24 @@ void LED_RGB_SetIntensity(uint8_t red, uint8_t green, uint8_t blue) {
 	htim1.Instance->CCR1 = 100 - red;
 	htim2.Instance->CCR1 = 100 - green;
 	htim3.Instance->CCR1 = 100 - blue;
+}
+
+
+/*	-----calculate_pwm_period
+ * This function returns the period that needs to be set for the PWM channel
+ * to run the motor at the required speed. For ex,
+ * Running the motor driver at 800 pulses per revolution
+ * Assuming 5mm pitch ball screw & 100mm/sec -> 20 revolutions / sec
+ * 800*20 pulses per second -> 16000 pulses per second
+ * 72MHz clock attached to the PWM
+ * counter period = 72M/16K = 4500
+ * intensity = 4500/2 = 2250
+*/
+int calculate_pwm_period(int speed){
+	int period;
+	period = MIN(72000000 / (MOTOR_DRIVER_PPR*(speed / BALL_SCREW_PITCH)),65535);
+	HAL_Delay(1);
+	return period;
 }
 
 //uint8_t MPU6050_IMURead8(uint8_t addr,uint8_t *data){
@@ -145,7 +166,8 @@ int main(void)
 	uint16_t intensity = 0;
 	uint16_t count = 0;
 	char txBuf[32];
-	int led_state=GPIO_PIN_RESET;
+	int m_dir = cw;
+	int period = 65535;
 	int mpu_status = mpu6050_init();
 
   /* USER CODE END 2 */
@@ -157,37 +179,50 @@ int main(void)
 		CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 		HAL_Delay(5);
 	} else {
-		HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, GPIO_PIN_SET);
 //		HAL_GPIO_WritePin(GPIOB, LED_Pin, GPIO_PIN_SET);
 		while (1) {
 			*accelerationPtr = mpu6050_read(0);
 			if (IMU_read_write) {
 				IMU_read_write = false;
 				sprintf(txBuf, "%d\r\n", count);
-				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 				IMU_read_write = true;
 			}
 
-			if(count<200){
+			if(user_inp[0]== 0x0D ){//|| user_inp[0]== '\r'
+//				M1_state(4,ccw);
 				count++;
-				led_state = GPIO_PIN_SET;
-				intensity = 32768;
+				m_dir = cw;
+				period = calculate_pwm_period(10);
+				intensity = period/2;
 				HAL_Delay(1);
-			}else if(count<400){
+//				if(count>300){
+//					memset(user_inp,'q',8);
+//					count = 0;
+//				}
+			}else if(user_inp[0]=='y'){
 				count++;
-				led_state = GPIO_PIN_RESET;
+				m_dir = ccw;
+				period = calculate_pwm_period(40);
+				intensity = period/2;
+				HAL_Delay(1);
+//				if(count>300){
+//					memset(user_inp,'q',8);
+//					count = 0;
+//				}
+			}else if(user_inp[0]=='q'){
 				intensity = 0;
-				HAL_Delay(1);
-			}else{
 				count=0;
 				HAL_Delay(1);
 			}
 
-			HAL_GPIO_WritePin(GPIOB, LED_Pin, led_state);
-			HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, led_state);
-			TIM1->CCR1 = intensity;
+			HAL_GPIO_WritePin(GPIOB, LED_Pin, m_dir);
+			HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, m_dir);
+			// Todo - Handle the reset of the period better
+			// set intensity to 0 before changing the period
+			htim1.Instance->ARR = period;
+			htim1.Instance->CCR1 = intensity;
 			HAL_Delay(1);
-
 		}
 	}
     /* USER CODE END WHILE */
@@ -298,7 +333,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
+  htim1.Init.Period = 4500;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;

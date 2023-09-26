@@ -51,7 +51,7 @@
 #define APP_RX_DATA_SIZE  2048
 #define APP_TX_DATA_SIZE  2048
 /* USER CODE BEGIN EXPORTED_DEFINES */
-
+ extern uint8_t user_inp[1];
 /* USER CODE END EXPORTED_DEFINES */
 
 /**

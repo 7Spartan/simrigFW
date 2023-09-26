@@ -32,6 +32,7 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "stdbool.h"
+#include "common_data.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -56,10 +57,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-enum imuStatus {
-	imuinitpass = 10, imuinitfail = 11, gyroinitpass = 12, gyroinitfail = 13,
 
-};
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
@@ -72,7 +70,7 @@ enum imuStatus {
 #define IMU_INT_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
-
+int calculate_pwm_period(int);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
