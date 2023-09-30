@@ -61,6 +61,12 @@ int16_t acceleration = 0;
 int16_t *accelerationPtr = &acceleration;
 bool IMU_read_write = true;
 uint8_t user_inp[1];
+int16_t pulse_count=0;
+int desired_pulse_count=800;
+uint16_t intensity = 0;
+char txBuf[32];
+int keyserved=1;
+int motorserved=1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -163,13 +169,14 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 	LED_RGB_Init();
-	uint16_t intensity = 0;
-	uint16_t count = 0;
-	char txBuf[32];
 	int m_dir = cw;
 	int period = 65535;
 	int mpu_status = mpu6050_init();
-
+	if (HAL_TIM_Base_Start_IT(&htim1) != HAL_OK){
+	  sprintf(txBuf, "%u\r\n", mpu_status);
+	  CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+	  HAL_Delay(5);
+	}
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -181,48 +188,62 @@ int main(void)
 	} else {
 //		HAL_GPIO_WritePin(GPIOB, LED_Pin, GPIO_PIN_SET);
 		while (1) {
+/*
 			*accelerationPtr = mpu6050_read(0);
 			if (IMU_read_write) {
 				IMU_read_write = false;
-				sprintf(txBuf, "%d\r\n", count);
-//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+//				sprintf(txBuf, "%d\r\n", count);
+				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 				IMU_read_write = true;
 			}
-
+*/
+//
+//			HAL_Delay(1);
 			if(user_inp[0]== 0x0D ){//|| user_inp[0]== '\r'
-//				M1_state(4,ccw);
-				count++;
-				m_dir = cw;
-				period = calculate_pwm_period(10);
-				intensity = period/2;
-				HAL_Delay(1);
-//				if(count>300){
+				if(!keyserved){
+					m_dir = cw;
+					period = calculate_pwm_period(10);
+					intensity = period/2;
+					HAL_Delay(1);
+					keyserved=1;
+					motorserved=0;
+					sprintf(txBuf, "Enter\r\n");
+					CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 //					memset(user_inp,'q',8);
-//					count = 0;
-//				}
+				}
 			}else if(user_inp[0]=='y'){
-				count++;
-				m_dir = ccw;
-				period = calculate_pwm_period(40);
-				intensity = period/2;
-				HAL_Delay(1);
-//				if(count>300){
-//					memset(user_inp,'q',8);
-//					count = 0;
-//				}
+				if(!keyserved){
+					m_dir = ccw;
+					period = calculate_pwm_period(30);
+					intensity = period/2;
+					HAL_Delay(1);
+					keyserved=1;
+					motorserved=0;
+					sprintf(txBuf, "ykey\r\n");
+					CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+				}
 			}else if(user_inp[0]=='q'){
-				intensity = 0;
-				count=0;
-				HAL_Delay(1);
+				if(!keyserved){
+					intensity = 0;
+					HAL_Delay(1);
+					keyserved=1;
+					motorserved=0;
+					sprintf(txBuf, "qkey\r\n");
+					CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+				}
 			}
 
-			HAL_GPIO_WritePin(GPIOB, LED_Pin, m_dir);
-			HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, m_dir);
-			// Todo - Handle the reset of the period better
-			// set intensity to 0 before changing the period
-			htim1.Instance->ARR = period;
-			htim1.Instance->CCR1 = intensity;
-			HAL_Delay(1);
+			if(!motorserved){
+				HAL_GPIO_WritePin(GPIOB, LED_Pin, m_dir);
+				HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, m_dir);
+				// Todo - Handle the reset of the period better
+				// set intensity to 0 before changing the period
+				htim1.Instance->ARR = period;
+				htim1.Instance->CCR1 = intensity;
+
+				HAL_Delay(1);
+				motorserved=1;
+			}
 		}
 	}
     /* USER CODE END WHILE */
@@ -754,6 +775,23 @@ static void MX_GPIO_Init(void)
 			__NOP();
 		}
 	}
+
+	void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+		if (htim->Instance == TIM1) {
+		        // Handle Timer 1 update event
+			pulse_count++;
+			if(pulse_count>= desired_pulse_count){
+				intensity = 0;
+				motorserved= 0;
+//				htim1.Instance->CCR1 = intensity;
+				pulse_count=0;
+//				sprintf(txBuf, "pulsed\r\n");
+//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+//				HAL_Delay(1);
+			}
+		}
+	}
+
 /* USER CODE END 4 */
 
 /**
