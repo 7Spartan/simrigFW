@@ -46,6 +46,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+DMA_HandleTypeDef hdma_i2c1_rx;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -57,21 +58,27 @@ TIM_HandleTypeDef htim9;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-int16_t acceleration = 0;
-int16_t *accelerationPtr = &acceleration;
+dsacc accelerometer_data;
+dsgyro gyro;
 bool IMU_read_write = true;
 uint8_t user_inp[1];
 int16_t pulse_count=0;
-int desired_pulse_count=800;
+int desired_pulse_count=200;
 uint16_t intensity = 0;
 char txBuf[32];
 int keyserved=1;
 int motorserved=1;
+int LED_dir = 0;
+uint8_t accel_data[6];
+uint8_t gyro_data[6];
+volatile uint8_t i2cReadInProgress = 0;
+int i2c_status;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
@@ -158,6 +165,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_I2C1_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
@@ -171,7 +179,7 @@ int main(void)
 	LED_RGB_Init();
 	int m_dir = cw;
 	int period = 65535;
-	int mpu_status = mpu6050_init();
+	imuStatus mpu_status = mpu6050_init();
 	if (HAL_TIM_Base_Start_IT(&htim1) != HAL_OK){
 	  sprintf(txBuf, "%u\r\n", mpu_status);
 	  CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
@@ -181,28 +189,36 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	accelerometer_data.accel_x=1;
+	accelerometer_data.accel_y=1;
+	accelerometer_data.accel_z=1;
+
 	if (mpu_status != HAL_OK) {
 		sprintf(txBuf, "%u\r\n", mpu_status);
 		CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
-		HAL_Delay(5);
 	} else {
 //		HAL_GPIO_WritePin(GPIOB, LED_Pin, GPIO_PIN_SET);
 		while (1) {
-/*
-			*accelerationPtr = mpu6050_read(0);
+//			*accelerationPtr = mpu6050_read(0);
 			if (IMU_read_write) {
-				IMU_read_write = false;
-//				sprintf(txBuf, "%d\r\n", count);
+				IMU_read_write = 0;
+				sprintf(txBuf, "%hd\t%hd\t%hd\r\n", accelerometer_data.accel_x,accelerometer_data.accel_y,accelerometer_data.accel_z);
 				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
-				IMU_read_write = true;
+				HAL_Delay(1);
+//				sprintf(txBuf, "y:%hd\r\n", accelerometer_data.accel_y);
+//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+//				HAL_Delay(1);
+//				sprintf(txBuf, "z:%hd\r\n", accelerometer_data.accel_z);
+//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+//				HAL_Delay(1);
+				IMU_read_write = 1;
 			}
-*/
 //
 //			HAL_Delay(1);
 			if(user_inp[0]== 0x0D ){//|| user_inp[0]== '\r'
 				if(!keyserved){
 					m_dir = cw;
-					period = calculate_pwm_period(10);
+					period = calculate_pwm_period(10);//10mm/second speed
 					intensity = period/2;
 					HAL_Delay(1);
 					keyserved=1;
@@ -234,13 +250,12 @@ int main(void)
 			}
 
 			if(!motorserved){
-				HAL_GPIO_WritePin(GPIOB, LED_Pin, m_dir);
+				HAL_GPIO_WritePin(GPIOB, LED_Pin, LED_dir);
 				HAL_GPIO_WritePin(GPIOB, M1_DIR_Pin, m_dir);
 				// Todo - Handle the reset of the period better
 				// set intensity to 0 before changing the period
 				htim1.Instance->ARR = period;
 				htim1.Instance->CCR1 = intensity;
-
 				HAL_Delay(1);
 				motorserved=1;
 			}
@@ -728,6 +743,22 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -770,7 +801,8 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 	void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		if (GPIO_Pin == IMU_INT_Pin) {
-//		*accelerationPtr = mpu6050_read(0);
+			mpu6050_accel_read();
+//			mpu6050_gyro_read();
 		} else {
 			__NOP();
 		}
@@ -783,13 +815,20 @@ static void MX_GPIO_Init(void)
 			if(pulse_count>= desired_pulse_count){
 				intensity = 0;
 				motorserved= 0;
-//				htim1.Instance->CCR1 = intensity;
 				pulse_count=0;
-//				sprintf(txBuf, "pulsed\r\n");
-//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
-//				HAL_Delay(1);
 			}
 		}
+	}
+
+	// This callback is called when the I2C read operation is completed
+	void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
+	    // Process the received I2C data
+		accelerometer_data.accel_x = (int16_t)((int16_t)(accel_data[0] << 8) | accel_data[1]);
+		accelerometer_data.accel_y = (int16_t)((int16_t)(accel_data[2] << 8) | accel_data[3]);
+		accelerometer_data.accel_z = (int16_t)((int16_t)(accel_data[4] << 8) | accel_data[5]);
+	    // Reset the flag to allow another I2C read operation
+		LED_dir = !LED_dir;
+	    i2cReadInProgress = 0;
 	}
 
 /* USER CODE END 4 */
