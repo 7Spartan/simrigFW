@@ -28,6 +28,7 @@ extern volatile uint8_t i2cReadInProgress;
 #define ACC_REG_DATA	59
 #define GYRO_REG_DATA	67
 #define DATA_READY_INTERRUPT	1
+
 imuStatus mpu6050_init();
 void mpu6050_accel_read();
 void mpu6050_gyro_read();

@@ -43,6 +43,7 @@ extern uint8_t write_status;
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+#define ACCELEROMETER_SENSITIVITY_FS_4G 0.244
 
 /* USER CODE END EC */
 

@@ -63,7 +63,7 @@ dsgyro gyro;
 bool IMU_read_write = true;
 uint8_t user_inp[1];
 int16_t pulse_count=0;
-int desired_pulse_count=200;
+int desired_pulse_count=15;
 uint16_t intensity = 0;
 char txBuf[32];
 int keyserved=1;
@@ -126,7 +126,8 @@ void LED_RGB_SetIntensity(uint8_t red, uint8_t green, uint8_t blue) {
 */
 int calculate_pwm_period(int speed){
 	int period;
-	period = MIN(72000000 / (MOTOR_DRIVER_PPR*(speed / BALL_SCREW_PITCH)),65535);
+	period = MIN(72000000 / (MOTOR_DRIVER_PPR*(speed / BALL_SCREW_PITCH)),72000);
+//	period = 72000;
 	HAL_Delay(1);
 	return period;
 }
@@ -160,7 +161,8 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  HAL_NVIC_SetPriority(TIM1_UP_TIM10_IRQn, 0, 0); // Set the priority for TIM1_UP_TIM10_IRQn to the highest
+  HAL_NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn); // Enable TIM1_UP_TIM10_IRQn
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -180,6 +182,12 @@ int main(void)
 	int m_dir = cw;
 	int period = 65535;
 	imuStatus mpu_status = mpu6050_init();
+	double calib_acc_data_x;
+	double calib_acc_data_y;
+	double calib_acc_data_z;
+	double pitch=0.0,roll=0.0,yaw=0.0;
+	double g = 9.81;
+
 	if (HAL_TIM_Base_Start_IT(&htim1) != HAL_OK){
 	  sprintf(txBuf, "%u\r\n", mpu_status);
 	  CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
@@ -202,8 +210,20 @@ int main(void)
 //			*accelerationPtr = mpu6050_read(0);
 			if (IMU_read_write) {
 				IMU_read_write = 0;
-				sprintf(txBuf, "%hd\t%hd\t%hd\r\n", accelerometer_data.accel_x,accelerometer_data.accel_y,accelerometer_data.accel_z);
-				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+//				sprintf(txBuf, "%hd\t%hd\t%hd\r\n", accelerometer_data.accel_x,accelerometer_data.accel_y,accelerometer_data.accel_z);
+//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+
+				calib_acc_data_x = (int16_t)(accelerometer_data.accel_x*ACCELEROMETER_SENSITIVITY_FS_4G);
+				calib_acc_data_y = (int16_t)(accelerometer_data.accel_y*ACCELEROMETER_SENSITIVITY_FS_4G);
+				calib_acc_data_z = (int16_t)(accelerometer_data.accel_z*ACCELEROMETER_SENSITIVITY_FS_4G);
+
+				pitch = 180 * atan2(calib_acc_data_x , sqrt(calib_acc_data_y * calib_acc_data_y + calib_acc_data_z * calib_acc_data_z))/M_PI;
+				roll = 180 * atan2(calib_acc_data_y , sqrt(calib_acc_data_x * calib_acc_data_x + calib_acc_data_z * calib_acc_data_z))/M_PI;
+				yaw = 180 * atan2(calib_acc_data_z , sqrt(calib_acc_data_y * calib_acc_data_y + calib_acc_data_x * calib_acc_data_x))/M_PI;
+
+//				sprintf(txBuf, "%lf\t%lf\t%lf\r\n", pitch,roll,yaw);
+//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+
 				HAL_Delay(1);
 //				sprintf(txBuf, "y:%hd\r\n", accelerometer_data.accel_y);
 //				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
@@ -215,34 +235,34 @@ int main(void)
 			}
 //
 //			HAL_Delay(1);
-			if(user_inp[0]== 0x0D ){//|| user_inp[0]== '\r'
+			if(user_inp[0]== 0x0D ){//Enter key
 				if(!keyserved){
+					keyserved=1;
 					m_dir = cw;
 					period = calculate_pwm_period(10);//10mm/second speed
 					intensity = period/2;
 					HAL_Delay(1);
-					keyserved=1;
 					motorserved=0;
 					sprintf(txBuf, "Enter\r\n");
 					CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 //					memset(user_inp,'q',8);
 				}
-			}else if(user_inp[0]=='y'){
+			}else if(user_inp[0]==0x79){//key 'y'
 				if(!keyserved){
+					keyserved=1;
 					m_dir = ccw;
-					period = calculate_pwm_period(30);
+					period = calculate_pwm_period(70);
 					intensity = period/2;
 					HAL_Delay(1);
-					keyserved=1;
 					motorserved=0;
 					sprintf(txBuf, "ykey\r\n");
 					CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 				}
-			}else if(user_inp[0]=='q'){
+			}else if(user_inp[0]==0x71){//key 'q'
 				if(!keyserved){
+					keyserved=1;
 					intensity = 0;
 					HAL_Delay(1);
-					keyserved=1;
 					motorserved=0;
 					sprintf(txBuf, "qkey\r\n");
 					CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
@@ -809,14 +829,11 @@ static void MX_GPIO_Init(void)
 	}
 
 	void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-		if (htim->Instance == TIM1) {
-		        // Handle Timer 1 update event
-			pulse_count++;
-			if(pulse_count>= desired_pulse_count){
-				intensity = 0;
-				motorserved= 0;
-				pulse_count=0;
-			}
+			// Handle Timer 1 update event
+		if(pulse_count>= desired_pulse_count){
+			intensity = 0;
+			motorserved= 0;
+			pulse_count=0;
 		}
 	}
 
