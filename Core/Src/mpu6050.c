@@ -53,19 +53,10 @@ imuStatus mpu6050_init() {
 
 }
 
-void mpu6050_accel_read() {
-
+void mpu6050_imu_read() {
 	if(!i2cReadInProgress){
 		i2cReadInProgress=1;
-		i2c_status = HAL_I2C_Mem_Read_DMA(&hi2c1, (DEVICE_ADDRESS << 1) + 1, ACC_REG_DATA, 1, accel_data, 6);
+		i2c_status = HAL_I2C_Mem_Read_DMA(&hi2c1, (DEVICE_ADDRESS << 1) + 1, ACC_REG_DATA, 1, imu_data, 14);
 	}
-
 }
-void mpu6050_gyro_read() {
 
-	if(!i2cReadInProgress){
-		i2cReadInProgress=1;
-		i2c_status = HAL_I2C_Mem_Read_DMA(&hi2c1, (DEVICE_ADDRESS << 1) + 1, GYRO_REG_DATA, 1, gyro_data, 6);
-	}
-
-}

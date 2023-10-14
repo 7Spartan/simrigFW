@@ -4,8 +4,7 @@
 #include "stdint.h"
 #include "common_data.h"
 
-extern uint8_t accel_data[6];
-extern uint8_t gyro_data[6];
+extern uint8_t imu_data[14];
 extern int i2c_status;
 extern volatile uint8_t i2cReadInProgress;
 
@@ -30,6 +29,5 @@ extern volatile uint8_t i2cReadInProgress;
 #define DATA_READY_INTERRUPT	1
 
 imuStatus mpu6050_init();
-void mpu6050_accel_read();
-void mpu6050_gyro_read();
+void mpu6050_imu_read();
 #endif

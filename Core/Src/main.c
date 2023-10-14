@@ -59,7 +59,7 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 dsacc accelerometer_data;
-dsgyro gyro;
+dsgyro gyroscope_data;
 bool IMU_read_write = true;
 uint8_t user_inp[1];
 int16_t pulse_count=0;
@@ -69,10 +69,10 @@ char txBuf[32];
 int keyserved=1;
 int motorserved=1;
 int LED_dir = 0;
-uint8_t accel_data[6];
-uint8_t gyro_data[6];
+uint8_t imu_data[14];
 volatile uint8_t i2cReadInProgress = 0;
 int i2c_status;
+int accel_read=1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -185,8 +185,14 @@ int main(void)
 	double calib_acc_data_x;
 	double calib_acc_data_y;
 	double calib_acc_data_z;
+	double acc_pitch=0.0,acc_roll=0.0,acc_yaw=0.0;
 	double pitch=0.0,roll=0.0,yaw=0.0;
+	double alpha=0.5;
 	double g = 9.81;
+	//gyro is configured to run at 500deg/sec -> 65.5LSB/°/s refer REG_CONFIG_GYRO in IMU initialization
+	float gyro_LSB_sensitivity = 500;
+	uint32_t start_time=0;
+	uint16_t delta_time=0;
 
 	if (HAL_TIM_Base_Start_IT(&htim1) != HAL_OK){
 	  sprintf(txBuf, "%u\r\n", mpu_status);
@@ -201,12 +207,20 @@ int main(void)
 	accelerometer_data.accel_y=1;
 	accelerometer_data.accel_z=1;
 
+	gyroscope_data.gyro_x=1;
+	gyroscope_data.gyro_y=1;
+	gyroscope_data.gyro_z=1;
+
+
 	if (mpu_status != HAL_OK) {
 		sprintf(txBuf, "%u\r\n", mpu_status);
 		CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 	} else {
 //		HAL_GPIO_WritePin(GPIOB, LED_Pin, GPIO_PIN_SET);
+		start_time = HAL_GetTick();
 		while (1) {
+			delta_time = HAL_GetTick() - start_time;
+			start_time = HAL_GetTick();
 //			*accelerationPtr = mpu6050_read(0);
 			if (IMU_read_write) {
 				IMU_read_write = 0;
@@ -217,11 +231,23 @@ int main(void)
 				calib_acc_data_y = (int16_t)(accelerometer_data.accel_y*ACCELEROMETER_SENSITIVITY_FS_4G);
 				calib_acc_data_z = (int16_t)(accelerometer_data.accel_z*ACCELEROMETER_SENSITIVITY_FS_4G);
 
-				pitch = 180 * atan2(calib_acc_data_x , sqrt(calib_acc_data_y * calib_acc_data_y + calib_acc_data_z * calib_acc_data_z))/M_PI;
-				roll = 180 * atan2(calib_acc_data_y , sqrt(calib_acc_data_x * calib_acc_data_x + calib_acc_data_z * calib_acc_data_z))/M_PI;
-				yaw = 180 * atan2(calib_acc_data_z , sqrt(calib_acc_data_y * calib_acc_data_y + calib_acc_data_x * calib_acc_data_x))/M_PI;
+				acc_pitch = 180 * atan2(calib_acc_data_x , sqrt(calib_acc_data_y * calib_acc_data_y + calib_acc_data_z * calib_acc_data_z))/M_PI;
+				acc_roll = 180 * atan2(calib_acc_data_y , sqrt(calib_acc_data_x * calib_acc_data_x + calib_acc_data_z * calib_acc_data_z))/M_PI;
+				acc_yaw = 180 * atan2(calib_acc_data_z , sqrt(calib_acc_data_y * calib_acc_data_y + calib_acc_data_x * calib_acc_data_x))/M_PI;
+
+				pitch = pitch + (int16_t)(gyroscope_data.gyro_x / gyro_LSB_sensitivity ) * (delta_time);
+				roll = roll + (int16_t) (gyroscope_data.gyro_y / gyro_LSB_sensitivity ) * (delta_time);
+				yaw = yaw + (int16_t) (gyroscope_data.gyro_z / gyro_LSB_sensitivity ) * (delta_time);
+
+				pitch = alpha * pitch + (1 - alpha) * acc_pitch;
+				roll = alpha * roll + (1 - alpha) * acc_roll;
+				yaw = alpha * yaw + (1 - alpha) * acc_yaw;
+
 
 //				sprintf(txBuf, "%lf\t%lf\t%lf\r\n", pitch,roll,yaw);
+//				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
+
+//				sprintf(txBuf, "%d\r\n", delta_time);
 //				CDC_Transmit_FS((uint8_t*) txBuf, strlen(txBuf));
 
 				HAL_Delay(1);
@@ -276,6 +302,11 @@ int main(void)
 				// set intensity to 0 before changing the period
 				htim1.Instance->ARR = period;
 				htim1.Instance->CCR1 = intensity;
+				if(desired_pulse_count-1>0){
+					htim1.Instance->RCR = desired_pulse_count-1;
+				}else{
+					htim1.Instance->RCR = 0;
+				}
 				HAL_Delay(1);
 				motorserved=1;
 			}
@@ -821,28 +852,30 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 	void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 		if (GPIO_Pin == IMU_INT_Pin) {
-			mpu6050_accel_read();
-//			mpu6050_gyro_read();
+			mpu6050_imu_read();
 		} else {
 			__NOP();
 		}
 	}
 
 	void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-			// Handle Timer 1 update event
-		if(pulse_count>= desired_pulse_count){
-			intensity = 0;
-			motorserved= 0;
-			pulse_count=0;
-		}
+		// Handle Timer 1 update event
+		intensity = 0;
+		motorserved= 0;
+		pulse_count=0;
 	}
 
 	// This callback is called when the I2C read operation is completed
 	void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
 	    // Process the received I2C data
-		accelerometer_data.accel_x = (int16_t)((int16_t)(accel_data[0] << 8) | accel_data[1]);
-		accelerometer_data.accel_y = (int16_t)((int16_t)(accel_data[2] << 8) | accel_data[3]);
-		accelerometer_data.accel_z = (int16_t)((int16_t)(accel_data[4] << 8) | accel_data[5]);
+
+		accelerometer_data.accel_x = (int16_t)((int16_t)(imu_data[0] << 8) | imu_data[1]);
+		accelerometer_data.accel_y = (int16_t)((int16_t)(imu_data[2] << 8) | imu_data[3]);
+		accelerometer_data.accel_z = (int16_t)((int16_t)(imu_data[4] << 8) | imu_data[5]);
+		gyroscope_data.gyro_x = (int16_t)((int16_t)(imu_data[8] << 8) | imu_data[9]);
+		gyroscope_data.gyro_y = (int16_t)((int16_t)(imu_data[10] << 8) | imu_data[11]);
+		gyroscope_data.gyro_z = (int16_t)((int16_t)(imu_data[12] << 8) | imu_data[13]);
+
 	    // Reset the flag to allow another I2C read operation
 		LED_dir = !LED_dir;
 	    i2cReadInProgress = 0;

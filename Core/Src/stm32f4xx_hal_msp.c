@@ -122,7 +122,7 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
     hdma_i2c1_rx.Init.Priority = DMA_PRIORITY_LOW;
     hdma_i2c1_rx.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
     hdma_i2c1_rx.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
-    hdma_i2c1_rx.Init.MemBurst = DMA_MBURST_INC8;
+    hdma_i2c1_rx.Init.MemBurst = DMA_MBURST_INC16;
     hdma_i2c1_rx.Init.PeriphBurst = DMA_PBURST_SINGLE;
     if (HAL_DMA_Init(&hdma_i2c1_rx) != HAL_OK)
     {
